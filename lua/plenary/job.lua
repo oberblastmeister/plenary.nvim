@@ -246,6 +246,113 @@ function Job:_create_uv_options()
   return options
 end
 
+local function process_data(err, data, processed_index)
+  -- We repeat forever as a coroutine so that we can keep calling this.
+  local line, start, result_line, found_newline
+
+  if data then
+    data = data:gsub("\r", "")
+
+    local data_length = #data + 1
+
+    start = string.find(data, "\n", processed_index, true) or data_length
+    line = string.sub(data, processed_index, start - 1)
+    found_newline = start ~= data_length
+
+    -- Concat to last line if there was something there already.
+    --    This happens when "data" is broken into chunks and sometimes
+    --    the content is sent without any newlines.
+    if result_line then
+      -- results[result_index] = results[result_index] .. line
+      result_line = result_line .. line
+
+      -- Only put in a new line when we actually have new data to split.
+      --    This is generally only false when we do end with a new line.
+      --    It prevents putting in a "" to the end of the results.
+    elseif start ~= processed_index or found_newline then
+      -- results[result_index] = line
+      result_line = line
+
+      -- Otherwise, we don't need to do anything.
+    end
+
+    return err, data, result_line, found_newline, start
+  end
+end
+
+local OnOutput = {}
+OnOutput.__index = OnOutput
+OnOutput.__call = function(self, err, data, is_complete)
+  print(data)
+  self.is_complete = is_complete
+  self.work:queue(err, data, self.processed_index)
+end
+
+function OnOutput.new(opts)
+  local self = setmetatable({}, OnOutput)
+  self.cb = opts.cb
+  self.job = opts.job
+  self.result_key = opts.result_key
+  self.result_index = 1
+  self.processed_index = 1
+  self.is_complete = false
+  self.state_cb = self:state_cb()
+  self.work = uv.new_work(process_data, vim.schedule_wrap(self.state_cb))
+  return self
+end
+
+--- Returns the callback used after the work is finished
+function OnOutput:state_cb()
+  local function wrapped(err, data, result_line, found_newline, start)
+    if found_newline then
+      if not result_line then
+        return vim.api.nvim_err_writeln(
+        "Broken data thing due to: " .. tostring(result_line) .. " " .. tostring(data)
+        )
+      end
+
+      if self.job.enable_recording then
+        self.job[self.result_key][self.result_index] = result_line
+      end
+
+      if self.cb then
+        self.cb(err, result_line, self.job)
+      end
+
+      -- Stop processing if we've surpassed the maximum.
+      if self.job._maximum_results and self.result_index > self.job._maximum_results then
+        -- Shutdown once we get the chance.
+        --  Can't call it here, because we'll just keep calling ourselves.
+        vim.schedule(function()
+          self.job:shutdown()
+        end)
+
+        return
+      end
+
+      self.result_index = self.result_index + 1
+      result_line = nil
+    end
+
+    self.processed_index = start + 1
+
+    if self.enable_recording then
+      self.job[self.result_key][self.result_index] = result_line
+    end
+
+    -- If we didn't get a newline on the last execute, send the final results.
+    if self.cb and self.is_complete and not found_newline then
+      self.cb(err, result_line, self)
+    end
+
+    if data == nil or self.is_complete then
+      return
+    end
+  end
+
+  return wrapped
+end
+
 local on_output = function(self, result_key, cb)
   return coroutine.wrap(function(err, data, is_complete)
     local result_index = 1
@@ -376,10 +483,20 @@ function Job:_execute()
 
   if self.enable_handlers then
     self._stdout_reader = on_output(self, "_stdout_results", self._user_on_stdout)
+    -- self._stdout_reader = OnOutput.new {
+    --   result_key = "_stdout_results",
+    --   cb = self._user_on_stdout,
+    --   job = self,
+    -- }
     self.stdout:read_start(self._stdout_reader)
 
     self._stderr_reader = on_output(self, "_stderr_results", self._user_on_stderr)
     self.stderr:read_start(self._stderr_reader)
+    -- self._stdout_reader = OnOutput.new {
+    --   result_key = "_stderr_results",
+    --   cb = self._user_on_stderr,
+    --   job = self,
+    -- }
   end
 
   if self.writer then
