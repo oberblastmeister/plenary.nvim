@@ -4,6 +4,15 @@ local eq = assert.are.same
 local id = a.util.id
 
 a.describe('async await util', function()
+  a.it('should work with multiple return values', function()
+    local fn = async(function()
+      return 1, 2, 3
+    end)
+
+    local res = {await(fn())}
+    eq(res, {1, 2, 3})
+  end)
+
   a.describe('block_on', function()
     a.it('should block_on', function()
       local fn = async(function()
