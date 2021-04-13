@@ -265,6 +265,14 @@ M.channel.mpsc = function()
     return unpack(val)
   end)
 
+  Receiver.wait = async(function()
+    await(condvar:wait())
+  end)
+
+  Receiver.inner = function()
+    return deque
+  end
+
   return Sender, Receiver
 end
 
