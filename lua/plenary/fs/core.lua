@@ -4,25 +4,29 @@ local tbl = require('plenary.tbl')
 
 local fs = {}
 
-local Stats = {}
-Stats.__index = Stats
+do
+  local Stats = {}
+  Stats.__index = Stats
 
-function Stats:is_file()
-  return self.type == "file"
+  function Stats:is_file()
+    return self.type == "file"
+  end
+
+  function Stats:is_dir()
+    return self.type == "directory"
+  end
+
+  local newStats = function(raw_stats)
+    return tbl.freeze(setmetatable(raw_stats, Stats))
+  end
+
+  fs.stat = async(function(path)
+    local err, stats = await(a.uv.fs_stat(path))
+    if err then
+      return err, nil
+    end
+    return err, newStats(stats)
+  end)
 end
-
-function Stats:is_dir()
-  return self.type == "directory"
-end
-
-local newStats = function(raw_stats)
-  return tbl.freeze(setmetatable(raw_stats, Stats))
-end
-
-fs.stat = async(function(path)
-  local err, stats = await(a.uv.fs_stat(path))
-  assert(not err, err)
-  return newStats(stats)
-end)
 
 return fs

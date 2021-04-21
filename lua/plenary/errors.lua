@@ -12,4 +12,8 @@ M.info_error = function(s, func_info, level)
   error(info, (level or 1) + 1)
 end
 
+M.todo = function()
+  error("Not yet implemented!", 2)
+end
+
 return M
