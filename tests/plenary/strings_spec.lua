@@ -104,6 +104,20 @@ describe('strings', function()
     end
   end)
 
+  describe('split', function()
+    it('should work', function()
+      local first, second = strings.split_first("hello\nworld", "\n")
+      eq("hello\n", first)
+      eq("world", second)
+    end)
+
+    it('', function()
+      local first, second = strings.split_first("hello", "\n")
+      eq("hello", first)
+      assert(second == nil)
+    end)
+  end)
+
   describe('dedent', function()
     local function lines(t)
       return table.concat(t, '\n')
