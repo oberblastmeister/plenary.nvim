@@ -1,17 +1,21 @@
--- very simple listener
+local async = require('plenary.async')
+local channel = async.channel
 
-local Emitter = {}
-Emitter.__index = Emitter
+-- very simple emitters
+local M = {}
 
-function Emitter.new()
-  return setmetatable({}, Emitter)
+local CallbackEmitter = {}
+CallbackEmitter.__index = CallbackEmitter
+
+function CallbackEmitter.new()
+  return setmetatable({}, CallbackEmitter)
 end
 
-function Emitter:next_idx(event)
+function CallbackEmitter:next_idx(event)
   return (#self[event]) + 1
 end
 
-function Emitter:on(event, listener)
+function CallbackEmitter:on(event, listener)
   assert(type(event) == "string")
   assert(type(listener) == "function")
 
@@ -19,11 +23,11 @@ function Emitter:on(event, listener)
     self[event] = {}
   end
 
-  self[event][self:next_idx()] = listener
+  self[event][self:next_idx(event)] = listener
 end
 
-function Emitter:once(event, listener)
-  local idx = self:next_idx()
+function CallbackEmitter:once(event, listener)
+  local idx = self:next_idx(event)
 
   self:on(event, function(...)
     listener(...)
@@ -31,7 +35,7 @@ function Emitter:once(event, listener)
   end)
 end
 
-function Emitter:emit(event, ...)
+function CallbackEmitter:emit(event, ...)
   assert(type(event) == "string")
 
   for _, listener in ipairs(self[event]) do
@@ -39,4 +43,19 @@ function Emitter:emit(event, ...)
   end
 end
 
-return Emitter
+M.CallbackEmitter = CallbackEmitter
+
+local ChannelEmitter = {}
+ChannelEmitter.__index = ChannelEmitter
+
+function ChannelEmitter.new()
+  return setmetatable({}, ChannelEmitter)
+end
+
+function ChannelEmitter:rx(event)
+end
+
+function ChannelEmitter:tx(event, ...)
+end
+
+return M

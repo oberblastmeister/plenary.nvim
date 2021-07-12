@@ -3,8 +3,10 @@ local uv = vim.loop
 local log = require("plenary.log")
 local async = require("plenary.async")
 local channel = async.control.channel
-local j_utils = require('plenary.async_job.util')
+local j_utils = require('plenary.process.util')
 local Emitter = require('plenary.emitter')
+local pipes = require("plenary.process.pipes")
+local NullPipe = pipes.NullPipe
 
 local M = {}
 
@@ -16,9 +18,9 @@ function Process.new(opts)
 
   self.command, self.uv_opts = j_utils.convert_opts(opts)
 
-  self.stdin = opts.stdin
-  self.stdout = opts.stdout
-  self.stderr = opts.stderr
+  self.stdin = opts.stdin or NullPipe.new()
+  self.stdout = opts.stdout or NullPipe.new()
+  self.stderr = opts.stderr or NullPipe.new()
 
   self.uv_opts.stdio = {
     self.stdin.handle,
@@ -43,19 +45,22 @@ function Process:_for_each_pipe(f)
   end
 end
 
-function Process:stop(force)
+function Process:kill(force)
+  local signal = force and "sigkill" or "sigterm"
+  self.handle:kill(signal)
+end
+
+function Process:stop()
   self:_for_each_pipe(function(p)
     p:close()
   end)
-  local signal = force and "sigkill" or "sigterm"
-  self.handle:kill(signal)
   self.handle:close()
 end
 
 function Process:status()
   local tx, rx = channel.oneshot()
 
-  self.emitter.on('exit', function(code, signal)
+  self.emitter:on('exit', function(code, signal)
     tx(code, signal)
   end)
 
@@ -65,11 +70,12 @@ end
 M.spawn = function(opts)
   local self = Process.new(opts)
 
-  self.emitter.on('exit', function()
+  self.emitter:on('exit', function()
     self:stop()
   end)
 
   self.handle = uv.spawn(self.command, self.uv_opts, function(code, signal)
+    assert(false)
     self.emitter.emit('exit', code, signal)
   end)
 

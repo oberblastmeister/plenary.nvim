@@ -15,7 +15,7 @@ function Pipe.new()
     emitter = Emitter.new()
   }, Pipe)
 
-  self.emitter.on('eof', function()
+  self.emitter:on("eof", function()
     self.handle:close()
   end)
 
@@ -62,6 +62,22 @@ function Pipe:read()
   return rx()
 end
 
+local split_first = function(s, split)
+  local idx = string.find(s, split, 1, true)
+
+  if idx == nil then
+    return s
+  end
+
+  local rest = string.sub(s, idx + 1)
+
+  -- if rest == "" then
+  --   rest = nil
+  -- end
+
+  return string.sub(s, 1, idx), rest
+end
+
 function Pipe:read_line()
   if self.stored then
     local data, new = strings.split_first(self.stored, "\n") -- no windows
@@ -70,7 +86,7 @@ function Pipe:read_line()
   end
 
   local got = self:read()
-  local data, new = string.split_first(got, "\n")
+  local data, new = split_first(got, "\n")
   self.stored = new
   return data
 end
@@ -106,5 +122,16 @@ function Pipe:read_till_end()
 
   return rx()
 end
+
+M.Pipe = Pipe
+
+local NullPipe = {}
+NullPipe.__index = NullPipe
+
+function NullPipe.new()
+  return {}
+end
+
+M.NullPipe = NullPipe
 
 return M

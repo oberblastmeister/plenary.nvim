@@ -164,7 +164,7 @@ M.dedent = function(str, leave_indent)
   return table.concat(result)
 end
 
-function M.split_first(s, split)
+M.split_first = function(s, split)
   local idx = string.find(s, split, 1, true)
 
   if idx == nil then
